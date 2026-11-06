@@ -481,6 +481,24 @@
            selectable.every(it => state.selected.has(itemId(it)));
   }
 
+  /**
+   * 更换发票文件夹：本地网页无法弹出系统目录选择框，
+   * 改为让用户粘贴路径，后端校验存在性后写入配置并重新扫描。
+   */
+  async function pickFolder() {
+    const cur = ($('#rootPath').textContent || '').trim();
+    const input = window.prompt('输入发票文件夹的完整路径', cur === '读取中…' ? '' : cur);
+    if (!input) return;
+    const r = await apiCall('POST', '/api/config/root', { root: input });
+    if (!r || !r.ok) return;
+    toast('已切换发票文件夹，正在重新扫描…', 2500);
+    $('#rootPath').textContent = r.root;
+    setTimeout(() => {
+      const b = $('#btnRescan');
+      if (b) b.click();
+    }, 300);
+  }
+
   function renderActionBar() {
     const n = state.selected.size;
     $('#selInfo').textContent = n ? `已选择 ${n} 张` : '未选择';
@@ -832,10 +850,11 @@
               () => toast('复制失败，请手动选择文本')
             );
           } else if (act === 'pick') {
-            // 演示版：真实版会调用后端目录选择框
-            toast('演示模式：正式版将弹出系统文件夹选择框', 2800);
+            pickFolder();
           } else if (act === 'open') {
-            toast('演示模式：正式版将在资源管理器中打开该文件夹', 2800);
+            apiCall('POST', '/api/reveal', { target: 'root' }).then(r => {
+              if (r && r.ok) toast('已在资源管理器中打开');
+            });
           }
         });
     });
@@ -843,13 +862,28 @@
     // 设置面板
     const API_ROUTES = [
       ['GET', '/api/health', '健康检查'],
+      ['GET', '/api/bootstrap', '网页自用：令牌与 MCP 路径（免令牌，仅回环）'],
       ['GET', '/api/summary', '汇总统计'],
       ['GET', '/api/invoices', '发票列表（可筛选）'],
-      ['GET', '/api/invoice/{id}', '单张详情'],
-      ['GET', '/api/invoice/{id}/text', '原文（供 AI 分析）'],
+      ['GET', '/api/invoice/{key}', '单张详情'],
+      ['GET', '/api/invoice/{key}/text', '原文（供 AI 分析）'],
       ['GET', '/api/rules', '修复规则列表'],
       ['POST', '/api/rules', '新增修复规则'],
       ['DELETE', '/api/rules/{id}', '删除规则'],
+      ['GET', '/api/categories', '分类与分配'],
+      ['POST', '/api/categories', '新建分类'],
+      ['POST', '/api/categories/assign', '批量归类'],
+      ['PATCH', '/api/categories/{id}', '改名 / 折叠'],
+      ['DELETE', '/api/categories/{id}', '删除分类'],
+      ['POST', '/api/archive', '办理归档（支持 dry_run 预演）'],
+      ['POST', '/api/undo', '撤销最近一次归档'],
+      ['POST', '/api/export', '导出 Excel'],
+      ['POST', '/api/rescan', '重新扫描（异步）'],
+      ['GET', '/api/scan/status', '扫描进度'],
+      ['GET', '/api/config', '读配置（含令牌）'],
+      ['POST', '/api/config/root', '更换发票根目录'],
+      ['POST', '/api/config/token/reset', '重置令牌'],
+      ['POST', '/api/reveal', '在资源管理器打开目录'],
     ];
 
     function openSettings() {

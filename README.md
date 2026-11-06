@@ -171,6 +171,8 @@ POST   /api/undo                          # 撤销最近一次归档
 POST   /api/export                        # 导出 Excel → <发票目录>/导出/
 GET    /api/config                        # 读配置（含令牌，需 Header 鉴权）
 POST   /api/config/token/reset            # 重置令牌
+POST   /api/config/root                   # 更换发票根目录 {root}
+POST   /api/reveal                        # 在资源管理器打开 {target: root|data|export}
 ```
 
 完整清单见 [API 文档](docs/API文档.md)。

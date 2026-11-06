@@ -68,6 +68,8 @@ X-Api-Token: <你的令牌>
 | GET | `/api/scan/status` | 扫描进度 `{running, done, total, error?}` |
 | GET | `/api/config` | 读配置（含令牌与 MCP 路径，需 Header 鉴权） |
 | POST | `/api/config/token/reset` | 重置令牌，返回新令牌 |
+| POST | `/api/config/root` | 更换发票根目录 `{root}`：校验存在性 → 写配置 → 数据目录随根迁移 |
+| POST | `/api/reveal` | 在系统文件管理器中打开 `{target: root\|data\|export}` |
 
 分类接口的 `id` 形如 `cat_12345678_ab12`；`category` 传 `null` 表示移出分类。
 删除分类不会删票，只会把该分类下的票置为「待归类」。

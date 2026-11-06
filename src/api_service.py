@@ -22,6 +22,7 @@ BASE_DIR = paths.app_dir()                              # …/发票/发票助�
 # 扫描根：默认由程序所在位置向上探测，之后跟随 config 里的 scan.root
 ROOT_DIR = paths.resolve_root()                         # …/发票
 DATA_DIR_NAME = '.发票助手'
+EXPORT_DIRNAME = '导出'
 
 DATA_DIR = os.path.join(ROOT_DIR, DATA_DIR_NAME)
 CONFIG_PATH = os.path.join(DATA_DIR, 'config.json')
@@ -122,6 +123,59 @@ def save_config(cfg):
     ensure_dirs()
     with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
         json.dump(cfg, f, ensure_ascii=False, indent=2)
+
+
+def _open_in_explorer(path):
+    """在系统文件管理器里打开一个目录（仅本机单机程序使用）。"""
+    if not path or not os.path.isdir(path):
+        return False
+    try:
+        if os.name == "nt":
+            os.startfile(path)  # noqa: S606  -- 本机单机工具，路径来自配置或已校验
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", path])
+        else:
+            subprocess.Popen(["xdg-open", path])
+        return True
+    except Exception as e:  # noqa: BLE001
+        print("open folder failed: %s" % e, file=sys.stderr)
+        return False
+
+
+def api_reveal(cfg, body):
+    """在资源管理器中打开发票目录 / 数据目录 / 导出目录。"""
+    target = (body or {}).get("target") or "root"
+    targets = {
+        "root": ROOT_DIR,
+        "data": DATA_DIR,
+        "export": os.path.join(ROOT_DIR, EXPORT_DIRNAME),
+    }
+    path = targets.get(target)
+    if not path:
+        return {"error": "未知的 target: %s" % target}
+    if not _open_in_explorer(path):
+        return {"error": "目录不存在或无法打开：%s" % os.path.basename(path)}
+    return {"ok": True, "target": target}
+
+
+def api_set_root(cfg, body):
+    """切换发票根目录：校验 → 写配置 → 重新绑定数据目录。"""
+    raw = (body or {}).get("root")
+    if not isinstance(raw, str) or not raw.strip():
+        return {"error": "缺少 root 参数"}
+    root = os.path.abspath(os.path.expanduser(raw.strip().strip('"')))
+    if not os.path.isdir(root):
+        return {"error": "文件夹不存在：%s" % root}
+    if os.path.realpath(root) == os.path.realpath(BASE_DIR):
+        return {"error": "不能选择程序自身所在的文件夹"}
+    if os.path.dirname(os.path.realpath(root)) == os.path.realpath(root):
+        return {"error": "不能选择磁盘根目录"}
+    cfg["scan"]["root"] = root
+    save_config(cfg)          # 先写当前数据目录
+    bind_root(root)           # 数据目录跟随新的扫描根
+    save_config(cfg)          # 再在新数据目录写一份，避免下次启动时分裂
+    return {"ok": True, "root": root}
+
 
 
 def reset_token():
@@ -521,13 +575,13 @@ def api_export(cfg, body):
         return {'error': '文件名只能包含中英文、数字、空格、点、下划线和短横线',
                 'max_length': 64}
 
-    out_dir = os.path.join(ROOT_DIR, '导出')
+    out_dir = os.path.join(ROOT_DIR, EXPORT_DIRNAME)
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, raw + '.xlsx')
 
     info = exporter.export_excel(items, out_path,
                                  scope_label=body.get('label') or '全部发票')
-    return {'ok': True, 'rel_path': os.path.join('导出', raw + '.xlsx'), **info}
+    return {'ok': True, 'rel_path': os.path.join(EXPORT_DIRNAME, raw + '.xlsx'), **info}
 
 
 def api_rule_add(cfg, body):
@@ -828,6 +882,8 @@ ROUTES = [
     ('POST', r'^/api/config/token/reset$', lambda c, q, b, m: {
         'ok': True, 'token': reset_token(),
     }),
+    ('POST', r'^/api/config/root$', lambda c, q, b, m: api_set_root(c, b)),
+    ('POST', r'^/api/reveal$', lambda c, q, b, m: api_reveal(c, b)),
 ]
 
 
