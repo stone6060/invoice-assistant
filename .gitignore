@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# 打包产物
+dist/
+build/
+*.spec
+
+# 运行期数据（含令牌、索引、操作日志，绝对不要提交）
+.发票助手/
+config.json
+fix_rules.json
+categories.json
+undo-log.json
+*.db
+*.sqlite3
+
+# 扫描结果 / 导出物
+web/demo-data.js
+.发票助手/overrides.json
+发票统计表*.xlsx
+导出/
+
+# 发票与个人资料 —— 本仓库只放程序，不放任何票据原件
+*.pdf
+*.ofd
+*.zip
+*.jpg
+*.jpeg
+*.png
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 测试临时文件
+tmp/
+test_out/
+
+# 临时脚本
+_*.py
