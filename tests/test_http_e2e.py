@@ -61,10 +61,12 @@ def main():
     os.makedirs(app)
     os.makedirs(os.path.join(inv, '.发票助手'))
 
-    for f in os.listdir(HERE):
+    root = os.path.dirname(HERE)
+    src = os.path.join(root, 'src')
+    for f in os.listdir(src):
         if f.endswith('.py'):
-            shutil.copy(os.path.join(HERE, f), app)
-    shutil.copytree(os.path.join(HERE, 'web'), os.path.join(app, 'web'))
+            shutil.copy(os.path.join(src, f), app)
+    shutil.copytree(os.path.join(root, 'web'), os.path.join(app, 'web'))
 
     with open(os.path.join(inv, '.发票助手', 'scan-data.json'), 'w', encoding='utf-8') as f:
         json.dump({'items': ITEMS, 'summary': {'files': 3, 'counted': 2, 'total': 125.5}}, f,

@@ -745,23 +745,57 @@
       render();
     });
 
-    // 执行归档
+    // 执行归档：把已分类的发票移动到各自的分类文件夹
     $('#btnArchive').addEventListener('click', () => {
       const ids = Array.from(state.selected);
-      const withCat = ids.filter(id => {
-        const it = state.items.find(x => itemId(x) === id);
-        return it && it.category;
+      if (!ids.length) return;
+
+      apiCall('POST', '/api/archive', { rel_paths: ids, dry_run: true }).then(d => {
+        if (!d) return;
+        const plan = d.plan || [];
+        const skipped = d.skipped || [];
+
+        if (!plan.length) {
+          toast(skipped.length ? `没有可归档的：${skipped[0].reason}` : '所选发票都还没有分类', 3600);
+          return;
+        }
+
+        const dirs = [...new Set(plan.map(p => p.category))];
+        const preview = plan.slice(0, 6)
+          .map(p => `· ${p.from.split('/').pop()} → ${p.category}/`)
+          .join('\n');
+        const more = plan.length > 6 ? `\n… 共 ${plan.length} 张` : '';
+        const skipTip = skipped.length
+          ? `\n\n将跳过 ${skipped.length} 张：${skipped[0].reason}`
+          : '';
+        const ok = confirm(
+          `把 ${plan.length} 张发票移动到各自的分类文件夹？\n\n${preview}${more}\n\n` +
+          `目标：发票目录下的 ${dirs.join('、')}${skipTip}\n\n` +
+          `同名文件会自动加序号，不会覆盖；移动后可用「撤销归档」还原。`
+        );
+        if (!ok) return;
+
+        apiCall('POST', '/api/archive', { rel_paths: ids }).then(r => {
+          if (!r) return;
+          const bad = (r.failed || []).length;
+          toast(`已归档 ${r.moved || 0} 张` + (bad ? `，${bad} 张失败` : ''), 4000);
+          state.selected.clear();
+          setTimeout(() => $('#btnRescan').click(), 600);
+        });
       });
-      if (!withCat.length) {
-        toast('所选发票都还没有分类，请先「分类选择」指定分类');
-        return;
-      }
-      const names = [...new Set(withCat.map(id => {
-        const it = state.items.find(x => itemId(x) === id);
-        const c = state.categories.find(x => x.id === it.category);
-        return c ? c.name : '';
-      }))].filter(Boolean);
-      toast(`归档 ${withCat.length} 张 → ${names.join('、')}（演示模式，未真正移动文件）`, 3200);
+    });
+
+    // 撤销归档
+    $('#btnUndo').addEventListener('click', () => {
+      if (!confirm('把最近一次归档的发票移回原位置？')) return;
+      apiCall('POST', '/api/undo', {}).then(d => {
+        if (!d) return;
+        const bad = (d.failed || []).length;
+        toast(d.restored
+          ? `已还原 ${d.restored} 张` + (bad ? `，${bad} 张失败` : '')
+          : (d.message || '没有可撤销的归档'), 4000);
+        if (d.restored) setTimeout(() => $('#btnRescan').click(), 600);
+      });
     });
 
     // 更换发票文件夹

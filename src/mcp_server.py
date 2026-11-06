@@ -301,6 +301,21 @@ TOOLS = [
         'handler': tool_rules_delete,
     },
     {
+        'name': 'invoice_set_category',
+        'description': ('把一张发票归入指定分类（分类不存在则新建，传空字符串表示移出分类）。'
+                        '分类名必须由用户明确给出，不要自行猜测或批量套用。'),
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'key': {'type': 'string', 'description': '发票 rel_path / 文件名 / 发票号'},
+                'category': {'type': 'string', 'description': '分类名；空字符串表示移出分类'},
+            },
+            'required': ['key', 'category'],
+            'additionalProperties': False,
+        },
+        'handler': tool_set_category,
+    },
+    {
         'name': 'invoice_export',
         'description': '导出 Excel 统计表（含汇总、分类小计、异常清单三个工作表）。',
         'inputSchema': {

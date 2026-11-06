@@ -9,19 +9,14 @@ import os
 import sys
 
 
-def resource_dir():
-    """只读资源（web/、*.py）所在目录；打包后是 _MEIPASS。"""
-    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
-        return sys._MEIPASS
-    return os.path.dirname(os.path.abspath(__file__))
-
-
 def main():
-    base = resource_dir()
-    sys.path.insert(0, base)
+    import paths
+
+    base = paths.resource_dir()
+    sys.path.insert(0, paths.app_dir())
 
     exe_dir = (os.path.dirname(sys.executable) if getattr(sys, 'frozen', False)
-               else os.path.dirname(os.path.abspath(__file__)))
+               else paths.resource_dir())
 
     import serve_api
 

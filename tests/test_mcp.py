@@ -7,7 +7,7 @@ import os
 sys.stdout.reconfigure(encoding='utf-8')
 
 PY = sys.executable
-SERVER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'mcp_server.py')
+SERVER = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src', 'mcp_server.py')
 
 
 class MCPClient:

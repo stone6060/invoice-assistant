@@ -6,7 +6,6 @@
 """
 import os
 import re
-import sys
 import zipfile
 import io
 from datetime import datetime

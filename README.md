@@ -57,7 +57,7 @@ sudo apt install poppler-utils
 双击「启动发票助手.bat」
 
 # 任意平台
-python serve_api.py
+python src/serve_api.py
 ```
 
 浏览器会自动打开 `http://127.0.0.1:17800/index.html`（端口被占用时自动顺延）。
@@ -65,7 +65,8 @@ python serve_api.py
 
 ### 指定发票目录
 
-程序默认把**自身所在目录的上一级**当作发票根目录，并自动探测该处是否真有发票文件。
+程序从自身所在目录向上逐级探测，把第一个「确实像发票目录」的文件夹
+（里面至少 3 个文件长得像发票，且占比不低）当作发票根目录；探测不到时用当前目录。
 可以显式指定：
 
 ```bash
@@ -81,11 +82,15 @@ export INVOICE_ROOT=~/invoices    # macOS / Linux
 ```
 我的发票/                  ← 发票根目录（含 .pdf）
 ├── 发票助手/              ← 本程序
-│   ├── serve_api.py
-│   └── web/
+│   ├── src/               ← 程序代码
+│   ├── web/               ← 前端资源
+│   └── 启动发票助手.bat
 ├── .发票助手/             ← 运行期数据（自动生成，勿提交）
-│   ├── config.json
-│   └── fix_rules.json
+│   ├── config.json        ← 端口、令牌、扫描根
+│   ├── scan-data.json     ← 最近一次扫描结果
+│   ├── categories.json    ← 分类与归属
+│   ├── fix_rules.json     ← 人工修正规则
+│   └── undo-log.json      ← 归档操作日志（供撤销）
 ├── 一号发票.pdf
 └── 111/                   ← 子目录也会被递归扫描
 ```
@@ -113,10 +118,12 @@ export INVOICE_ROOT=~/invoices    # macOS / Linux
 
 ### 分类与归档
 
-- 分类**全手动**，工具不猜
+- 分类**全手动**，工具不猜；分类与归属存在 `.发票助手/categories.json`，刷新、重启都不丢
 - 表格每行有下拉框，也可多选后批量设置
-- 「执行归档」会把文件**移动到**对应分类文件夹（只建一层，不套娃）
-- 每次移动都记入 `undo-log.json`，可撤销
+- 「执行归档」会先列出「哪张票 → 哪个文件夹」让你确认，确认后才把文件**移动**到
+  `<发票根>/<分类名>/`（只建一层，不套娃）；同名文件自动加 `(2)` 序号，绝不覆盖
+- 每次移动都记入 `.发票助手/undo-log.json`；顶栏「撤销归档」可逆序还原
+- 移动后分类关系会跟着文件走（内部把 rel_path 改键），不会因为换位置就丢分类
 
 ### 导出 Excel
 
@@ -134,7 +141,7 @@ export INVOICE_ROOT=~/invoices    # macOS / Linux
 ### MCP 接口
 
 可作为 MCP Server 接入 Claude Desktop / Cursor / Cline，让 AI 直接查你的发票数据。
-详见 [MCP使用说明.md](MCP使用说明.md)。
+详见 [MCP 使用说明](docs/MCP使用说明.md)。
 
 ---
 
@@ -143,19 +150,30 @@ export INVOICE_ROOT=~/invoices    # macOS / Linux
 启动后提供本地回环 API，全部需要令牌（除 `/api/health`、`/api/bootstrap`）。
 
 ```http
-GET  /api/health                         # 探活，无需令牌
-GET  /api/bootstrap                      # 页面首次加载取令牌（免令牌，但校验 Host）
-GET  /api/summary                        # 汇总统计（含待确认金额单列）
-GET  /api/invoices?q=关键字&limit=500     # 列表 / 搜索
-GET  /api/invoice?key=<key>              # 单张票详情
-POST /api/rescan                         # 重新扫描（异步）
-GET  /api/scan/status                    # 扫描进度
-GET  /api/categories                     # 分类与分配
-POST /api/categories/assign              # 批量归类 {rel_paths, category}
-POST /api/export                         # 导出 Excel → <发票目录>/导出/
+GET    /api/health                        # 探活，无需令牌
+GET    /api/bootstrap                     # 页面首次加载取令牌（免令牌，但校验 Host）
+GET    /api/summary                       # 汇总（含待确认金额单列）
+GET    /api/invoices?q=&status=&limit=    # 列表 / 搜索
+GET    /api/invoice/{key}                 # 单张详情（rel_path / filename / 发票号）
+GET    /api/invoice/{key}/text            # 票面原文，供 AI 分析
+POST   /api/rescan                        # 重新扫描（异步）
+GET    /api/scan/status                   # 扫描进度
+GET    /api/rules                         # 修复规则
+POST   /api/rules                         # 新增规则
+DELETE /api/rules/{id}                    # 删除规则
+GET    /api/categories                    # 分类与分配
+POST   /api/categories                    # 新建分类
+POST   /api/categories/assign             # 批量归类 {rel_paths, category}
+PATCH  /api/categories/{id}               # 改名 / 折叠
+DELETE /api/categories/{id}               # 删除分类
+POST   /api/archive                       # 办理归档 {rel_paths, dry_run}
+POST   /api/undo                          # 撤销最近一次归档
+POST   /api/export                        # 导出 Excel → <发票目录>/导出/
+GET    /api/config                        # 读配置（含令牌，需 Header 鉴权）
+POST   /api/config/token/reset            # 重置令牌
 ```
 
-完整清单见 [API文档.md](API文档.md)。
+完整清单见 [API 文档](docs/API文档.md)。
 
 令牌在首次启动时随机生成，存于 `.发票助手/config.json`，可在网页「设置」里查看或重置。
 
@@ -165,22 +183,29 @@ POST /api/export                         # 导出 Excel → <发票目录>/导�
 
 ```
 invoice-assistant/
-├── serve_api.py          入口：起 HTTP 服务 + 页面关闭后自动退出
-├── api_service.py        配置与数据访问层，路由分发
-├── paths.py              路径与外部工具解析（跨机器可迁移的关键）
-├── scan_demo_data.py     扫描引擎：遍历 → 解析 → 去重 → 校验 → 输出数据
-├── exporter.py           Excel 导出（含公式缓存回填、公式注入防护）
-├── categories.py         分类与分配（原子写 + 跨进程文件锁）
-├── safezip.py            压缩包护栏（单文件/总量/压缩比上限）
-├── mcp_server.py         MCP stdio 服务
-├── app_entry.py          打包成 exe 时的入口
-├── web/
+├── 启动发票助手.bat       双击即用（自动找 Python 并装依赖）
+├── requirements.txt
+├── src/                  程序代码
+│   ├── serve_api.py      入口：起 HTTP 服务 + 页面关闭后自动退出
+│   ├── api_service.py    配置与数据访问层，路由分发
+│   ├── paths.py          路径与外部工具解析（跨机器可迁移的关键）
+│   ├── scan_demo_data.py 扫描引擎：遍历 → 解析 → 去重 → 校验
+│   ├── exporter.py       Excel 导出（含公式缓存回填、公式注入防护）
+│   ├── categories.py     分类与分配（原子写 + 跨进程文件锁）
+│   ├── safezip.py        压缩包护栏（单文件/总量/压缩比上限）
+│   ├── mcp_server.py     MCP stdio 服务
+│   └── app_entry.py      打包成 exe 时的入口
+├── web/                  前端（原生 JS，无构建）
 │   ├── index.html
 │   ├── app.css
 │   └── app.js
-├── test_core.py          离线自检（16 项，无需服务、无需发票）
-├── test_http_e2e.py      起服务的 HTTP 端到端（9 项，含安全项）
-└── test_all.py           连真实服务的全功能验收
+├── tests/
+│   ├── test_core.py      离线自检（16 项，无需服务、无需发票）
+│   ├── test_http_e2e.py  HTTP 端到端（9 项，含安全项）
+│   ├── test_all.py       连真实服务的全功能验收（20 项）
+│   ├── test_api.py       AI 修复闭环
+│   └── test_mcp.py       MCP 协议握手
+└── docs/                 详细文档
 ```
 
 ---
@@ -211,10 +236,16 @@ invoice-assistant/
 ## 开发
 
 ```bash
-# 跑测试（需先启动服务）
-python serve_api.py &
-python test_all.py
+# 离线自检（不需要服务、不需要发票）
+python tests/test_core.py          # 16 项
+python tests/test_http_e2e.py      # 9 项，自己起服务
+
+# 全功能验收（需先启动服务）
+python src/serve_api.py &
+python tests/test_all.py           # 20 项
 ```
+
+启动服务时如果不在仓库根目录，用 `--root` 显式指定发票目录。
 
 测试覆盖：鉴权、汇总、搜索、详情、原文提取（PDF 与铁路票 ZIP）、规则增删、异步扫描、Excel 导出与公式缓存、MCP 路径校验。
 

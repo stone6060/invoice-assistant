@@ -62,13 +62,6 @@ def file_hash(p):
     return h.hexdigest()[:16]
 
 
-def fix_name(n):
-    try:
-        return n.encode('cp437').decode('gbk')
-    except Exception:
-        return n
-
-
 def pdf_text(path):
     try:
         r = subprocess.run([PDFTOTEXT, path, '-'], stdout=subprocess.PIPE,

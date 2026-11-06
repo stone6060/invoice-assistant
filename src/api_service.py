@@ -2,6 +2,7 @@
 
 精简版：去掉局域网访问、CORS 等非必要项，只保留本机回环使用所需的最小配置。
 """
+import io
 import os
 import re
 import sys
@@ -27,6 +28,7 @@ CONFIG_PATH = os.path.join(DATA_DIR, 'config.json')
 RULES_PATH = os.path.join(DATA_DIR, 'fix_rules.json')
 CATEGORIES_PATH = os.path.join(DATA_DIR, 'categories.json')
 SCAN_DATA_PATH = os.path.join(DATA_DIR, 'scan-data.json')
+UNDO_PATH = os.path.join(DATA_DIR, 'undo-log.json')
 
 from categories import CategoryStore          # noqa: E402
 from scan_demo_data import is_counted         # noqa: E402  唯一的「是否计账」判定
@@ -40,7 +42,7 @@ def bind_root(root):
     ROOT_DIR 会和 config 里的 scan.root 不一致。若各处仍用模块级路径，就会
     在两个目录下各写一份 .发票助手（配置、分类、扫描结果各自分裂）。
     """
-    global ROOT_DIR, DATA_DIR, CONFIG_PATH, RULES_PATH, CATEGORIES_PATH
+    global ROOT_DIR, DATA_DIR, CONFIG_PATH, RULES_PATH, CATEGORIES_PATH, UNDO_PATH, SCAN_DATA_PATH
     global SCAN_DATA_PATH, CATEGORY_STORE
 
     root = os.path.abspath(root)
@@ -51,6 +53,7 @@ def bind_root(root):
     CONFIG_PATH = os.path.join(DATA_DIR, 'config.json')
     RULES_PATH = os.path.join(DATA_DIR, 'fix_rules.json')
     CATEGORIES_PATH = os.path.join(DATA_DIR, 'categories.json')
+    UNDO_PATH = os.path.join(DATA_DIR, 'undo-log.json')
     SCAN_DATA_PATH = os.path.join(DATA_DIR, 'scan-data.json')
     CATEGORY_STORE = CategoryStore(CATEGORIES_PATH)
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -610,6 +613,174 @@ def api_category_assign(cfg, body):
     return {'ok': True, 'result': res}
 
 
+# ---------------------------------------------------------------- 归档
+_BAD_DIRNAME = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+_RESERVED_DIRS = {DATA_DIR_NAME, '导出', '.git'}
+
+
+def _safe_dirname(name):
+    """分类名 → 合法、安全的文件夹名。"""
+    s = _BAD_DIRNAME.sub('_', (name or '')).strip().strip('.')
+    s = s.replace('..', '_')[:40].strip()
+    if not s or s in _RESERVED_DIRS:
+        return None
+    # 全是替换出来的下划线（例如分类名「///」）也算无效
+    if not s.strip('_. '):
+        return None
+    return s
+
+
+def _unique_target(path):
+    """目标已存在时加 (2)(3)…，绝不覆盖原件。"""
+    if not os.path.exists(path):
+        return path
+    stem, ext = os.path.splitext(path)
+    i = 2
+    while i < 1000:
+        cand = '%s (%d)%s' % (stem, i, ext)
+        if not os.path.exists(cand):
+            return cand
+        i += 1
+    raise RuntimeError('同名文件过多：%s' % os.path.basename(path))
+
+
+def _under_root(path):
+    root = os.path.realpath(ROOT_DIR)
+    real = os.path.realpath(path)
+    return real == root or real.startswith(root + os.sep)
+
+
+def _undo_load():
+    try:
+        with io.open(UNDO_PATH, encoding='utf-8') as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {'version': 1, 'entries': []}
+    except (IOError, OSError, ValueError):
+        return {'version': 1, 'entries': []}
+
+
+def _undo_save(data):
+    tmp = UNDO_PATH + '.tmp'
+    with io.open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, UNDO_PATH)
+
+
+def api_archive(cfg, body):
+    """把已分类的发票移动到 <发票根>/<分类名>/ 下。
+
+    body = {rel_paths: [...], dry_run: true|false}
+    dry_run 只返回计划，不碰任何文件。
+    """
+    body = body or {}
+    rel = body.get('rel_paths')
+    if not isinstance(rel, list):
+        return {'error': 'rel_paths 必须是字符串数组'}
+    dry = bool(body.get('dry_run'))
+
+    items, _data, _n = build_items()
+    by_rel = {i.get('rel_path'): i for i in items if i.get('rel_path')}
+    snap = CATEGORY_STORE.snapshot()
+    cat_by_id = {c['id']: c for c in snap['categories']}
+
+    plan, skipped = [], []
+    for rp in rel:
+        it = by_rel.get(rp)
+        if not it:
+            skipped.append({'rel_path': rp, 'reason': '扫描结果里没有这张票'})
+            continue
+        cid = it.get('category')
+        cat = cat_by_id.get(cid) if cid else None
+        if not cat:
+            skipped.append({'rel_path': rp, 'reason': '还没有分类'})
+            continue
+        folder = _safe_dirname(cat['name'])
+        if not folder:
+            skipped.append({'rel_path': rp, 'reason': '分类名不能用作文件夹名'})
+            continue
+        src = os.path.join(ROOT_DIR, rp.replace('/', os.sep))
+        if not os.path.isfile(src):
+            skipped.append({'rel_path': rp, 'reason': '文件不存在'})
+            continue
+        if not _under_root(src):
+            skipped.append({'rel_path': rp, 'reason': '不在发票目录内'})
+            continue
+        dst = _unique_target(os.path.join(ROOT_DIR, folder, os.path.basename(src)))
+        plan.append({
+            'rel_path': rp,
+            'from': rp,
+            'to': os.path.relpath(dst, ROOT_DIR).replace(os.sep, '/'),
+            'category': cat['name'],
+        })
+
+    if dry:
+        return {'ok': True, 'dry_run': True, 'plan': plan, 'skipped': skipped}
+
+    if not plan:
+        return {'ok': True, 'moved': 0, 'plan': [], 'skipped': skipped}
+
+    undo = _undo_load()
+    moved, failed = [], []
+    for p in plan:
+        src = os.path.join(ROOT_DIR, p['from'].replace('/', os.sep))
+        dst = os.path.join(ROOT_DIR, p['to'].replace('/', os.sep))
+        try:
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            shutil.move(src, dst)
+        except (OSError, IOError) as e:
+            failed.append({'rel_path': p['from'], 'reason': str(e)[:120]})
+            continue
+        moved.append(p)
+        undo['entries'].append({
+            'ts': datetime.now().isoformat(timespec='seconds'),
+            'from': p['from'],
+            'to': p['to'],
+            'category': p['category'],
+        })
+        # 分类跟着文件走：rel_path 变了，assignments 的键也要改
+        CATEGORY_STORE.rekey(p['from'], p['to'])
+
+    if moved:
+        _undo_save(undo)
+
+    return {'ok': True, 'moved': len(moved), 'plan': moved,
+            'failed': failed, 'skipped': skipped,
+            'can_undo': len(undo['entries'])}
+
+
+def api_undo(cfg):
+    """撤销最近一次归档（逆序移回原位）。"""
+    data = _undo_load()
+    entries = data.get('entries') or []
+    if not entries:
+        return {'ok': True, 'restored': 0, 'failed': [], 'message': '没有可撤销的归档'}
+
+    restored, failed, keep = [], [], []
+    for e in reversed(entries):
+        src = os.path.join(ROOT_DIR, e['to'].replace('/', os.sep))
+        dst = _unique_target(os.path.join(ROOT_DIR, e['from'].replace('/', os.sep)))
+        try:
+            if not os.path.isfile(src):
+                failed.append({'to': e['to'], 'reason': '文件已不在归档位置'})
+                keep.append(e)
+                continue
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            shutil.move(src, dst)
+            restored.append(e)
+            CATEGORY_STORE.rekey(e['to'], e['from'])
+        except (OSError, IOError) as ex:
+            failed.append({'to': e['to'], 'reason': str(ex)[:120]})
+            keep.append(e)
+
+    # 只保留没撤销成功的
+    data['entries'] = list(reversed(keep))
+    _undo_save(data)
+    return {'ok': True, 'restored': len(restored), 'failed': failed,
+            'left': len(data['entries'])}
+
+
 # ---------------------------------------------------------------- 路由
 ROUTES = [
     ('GET', r'^/api/health$', lambda c, q, b, m: api_health(c)),
@@ -631,6 +802,8 @@ ROUTES = [
      lambda c, q, b, m: api_category_update(c, m['id'], b)),
     ('DELETE', r'^/api/categories/(?P<id>[^/]+)$',
      lambda c, q, b, m: api_category_delete(c, m['id'])),
+    ('POST', r'^/api/archive$', lambda c, q, b, m: api_archive(c, b)),
+    ('POST', r'^/api/undo$', lambda c, q, b, m: api_undo(c)),
     ('POST', r'^/api/export$', lambda c, q, b, m: api_export(c, b)),
     ('POST', r'^/api/rescan$', lambda c, q, b, m: api_rescan_async(c)),
     ('GET', r'^/api/scan/status$', lambda c, q, b, m: api_scan_status(c)),

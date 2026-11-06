@@ -19,7 +19,7 @@ MCP 官方客户端默认就用 stdio——**客户端自己拉起进程，不�
 
 ## 二、接入配置
 
-启动一次 `serve_api.py`，网页右上角齿轮 →「设置」→ 复制 MCP 配置即可（路径会自动填成真实值）。
+启动一次 `src/serve_api.py`，网页右上角齿轮 →「设置」→ 复制 MCP 配置即可（路径会自动填成真实值）。
 
 ### Claude Desktop
 
@@ -33,7 +33,7 @@ MCP 官方客户端默认就用 stdio——**客户端自己拉起进程，不�
     "invoice-assistant": {
       "command": "C:\\Users\\<你>\\.dsh\\dsh-runtimes\\dsh-primary-runtime\\dependencies\\python\\python.exe",
       "args": [
-        "<发票助手目录>\\mcp_server.py"
+        "<发票助手目录>\\src\\mcp_server.py"
       ]
     }
   }
@@ -52,7 +52,7 @@ MCP 官方客户端默认就用 stdio——**客户端自己拉起进程，不�
 
 ---
 
-## 三、可用工具（8 个）
+## 三、可用工具（10 个）
 
 | 工具名 | 作用 | 必填参数 |
 | :--- | :--- | :--- |
@@ -64,6 +64,8 @@ MCP 官方客户端默认就用 stdio——**客户端自己拉起进程，不�
 | `invoice_rules_list` | 查看修复规则 | — |
 | `invoice_rule_add` | 新增修复规则 | `match` `field` `value` |
 | `invoice_rule_delete` | 删除修复规则 | `id` |
+| `invoice_set_category` | 把一张票归入分类（分类名必须由用户给出） | `key` `category` |
+| `invoice_export` | 导出 Excel（汇总 / 分类小计 / 异常清单） | — |
 
 `key` 可以是相对路径、文件名或发票号。
 
@@ -111,7 +113,7 @@ AI: invoice_get(key)              → 确认 amount=1.5
 
 ```bash
 # 协议自测（模拟 Claude Desktop 握手）
-python test_mcp.py
+python tests/test_mcp.py
 ```
 
 预期输出：
@@ -122,10 +124,10 @@ python test_mcp.py
    protocol = 2024-11-05
 
 ② tools/list 工具清单
-   共 8 个工具：...
+   共 10 个工具：...
 
 ③ invoice_summary
-   共 77 个文件，计账 74 张，总金额 ¥8419.86；重复 1 张，待确认 0 张。
+   共 80 个文件，计账 76 张，总金额 ¥8764.86；重复 1 张，待确认 0 张。
 ```
 
 ---
@@ -135,7 +137,7 @@ python test_mcp.py
 | 现象 | 原因 | 解决 |
 | :--- | :--- | :--- |
 | 客户端看不到工具 | 路径写错或 Python 不可执行 | 用设置页复制的配置，别手打 |
-| 工具调用失败 | 发票目录没配置 | 先启动一次 `serve_api.py` |
+| 工具调用失败 | 发票目录没配置 | 先启动一次 `src/serve_api.py` |
 | 中文乱码 | Windows 默认 GBK | 已强制 UTF-8，`mcp_server.py` 内处理 |
 | 日志在哪 | — | `.发票助手/mcp.log` |
 
@@ -145,8 +147,9 @@ python test_mcp.py
 
 ```
 发票助手/
-├── mcp_server.py      ← MCP 服务端（stdio，AI 客户端调用）
-├── serve_api.py       ← 本地服务（网页 + 本机 API）
+├── src/
+│   ├── mcp_server.py  ← MCP 服务端（stdio，AI 客户端调用）
+│   └── serve_api.py   ← 本地服务（网页 + 本机 API）
 ├── api_service.py     ← 共享能力层（配置 / 规则 / 数据）
 ├── scan_demo_data.py  ← 扫描解析引擎
 └── web/               ← 网页界面

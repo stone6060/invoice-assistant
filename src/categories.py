@@ -277,6 +277,21 @@ class CategoryStore:
             self._write(d)
             return {'assigned': n, 'category': cat_id}
 
+    def rekey(self, old_rel, new_rel):
+        """文件被移动后，把分配关系跟着换键（否则归档即丢分类）。"""
+        if not old_rel or not new_rel or old_rel == new_rel:
+            return False
+        with self._txn():
+            d = self._read()
+            if old_rel not in d['assignments']:
+                return False
+            cat = d['assignments'].pop(old_rel)
+            if new_rel in d['assignments']:
+                return False
+            d['assignments'][new_rel] = cat
+            self._write(d)
+            return True
+
     def apply_to_items(self, items):
         """把分配结果叠加到发票列表上（就地修改并返回）。"""
         with _lock:

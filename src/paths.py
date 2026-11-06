@@ -14,24 +14,60 @@ def app_dir():
     return os.path.dirname(os.path.abspath(__file__))
 
 
+def resource_dir():
+    """只读资源（web/、模板等）所在目录。
+
+    源码运行：src/ 的上一级（仓库根）——因为 web/ 放在仓库根；
+    打包运行：PyInstaller 的 _MEIPASS。
+    """
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        return sys._MEIPASS
+    here = app_dir()
+    parent = os.path.dirname(here)
+    if os.path.isdir(os.path.join(parent, 'web')):
+        return parent
+    return here
+
+
+_INVOICE_HINT = None      # 延迟编译，避免 import 期的开销
+
+
 def _count_invoices(path):
-    """统计目录一层的发票文件数（只看当前层，不递归）。"""
+    """统计目录一层里「像发票的文件数 / 普通文件总数」（只看当前层）。
+
+    只数 .pdf/.zip 不够——项目素材目录里常常也躺着几个无关的 pdf（竞赛规则、
+    获奖证书、打包产物），会被误判成发票目录。这里额外要求文件名带发票特征
+    （dzfp / ostb / invoice / 发票 / fapiao），真实发票几乎都满足。
+    """
+    import re
+    global _INVOICE_HINT
+    if _INVOICE_HINT is None:
+        _INVOICE_HINT = re.compile(r'dzfp|ostb|invoice|发票|fapiao|\d{15,}', re.I)
     try:
         names = os.listdir(path)
     except OSError:
-        return 0
-    return sum(1 for n in names if n.lower().endswith(('.pdf', '.ofd', '.zip')))
+        return 0, 0
+    total = inv = 0
+    for n in names:
+        if os.path.isdir(os.path.join(path, n)):
+            continue
+        total += 1
+        if n.lower().endswith(('.pdf', '.ofd', '.zip')) and _INVOICE_HINT.search(n):
+            inv += 1
+    return inv, total
 
 
-def _walk_up_for_invoices(start, max_level=3, threshold=3):
+def _walk_up_for_invoices(start, max_level=4, threshold=3):
     """从 start 往上找发票目录。
 
-    要求该层至少有 threshold 个发票文件 —— 只靠「存在任意一个 pdf」
-    很容易误判到上级的杂物目录（那里可能散落着一两个不相干的 pdf）。
+    判据是「数量 + 占比」：至少 threshold 个文件名像发票的文件，且占该层
+    普通文件的 30% 以上。两个条件缺一不可，否则上级素材目录（几个竞赛
+    规则 pdf 混在项目文件里）会被误判成发票目录。
     """
     cur = start
     for _ in range(max_level):
-        if _count_invoices(cur) >= threshold:
+        inv, total = _count_invoices(cur)
+        if inv >= threshold and total and inv / total >= 0.3:
             return cur
         parent = os.path.dirname(cur)
         if parent == cur:
@@ -148,13 +184,3 @@ def find_pdftotext(verify=True):
     return _pdf_backend_ok or None
 
 
-def describe_env():
-    """给启动横幅/设置面板用的环境自检信息。"""
-    pdf = find_pdftotext()
-    return {
-        'root': resolve_root(),
-        'pdftotext': pdf,
-        'pdftotext_ok': bool(pdf),
-        'python': sys.version.split()[0],
-        'platform': sys.platform,
-    }

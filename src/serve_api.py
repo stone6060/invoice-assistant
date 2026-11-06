@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import api_service as api
 import paths
 
-WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'web')
+WEB_DIR = os.path.join(paths.resource_dir(), 'web')
 IDLE_TIMEOUT = 60
 MAX_BODY = 1024 * 1024          # 1 MB，本服务的请求体只是小 JSON
 _last_beat = time.time()
@@ -284,7 +284,7 @@ def main():
     print()
     print('  MCP 接入（Claude Desktop / Cursor / Cline）:')
     print(f'    command: {sys.executable}')
-    print(f'    args:    ["{os.path.join(os.path.dirname(os.path.abspath(__file__)), "mcp_server.py")}"]')
+    print(f'    args:    ["{os.path.join(paths.app_dir(), "mcp_server.py")}"]')
     print('=' * 60)
 
     _last_beat = time.time()

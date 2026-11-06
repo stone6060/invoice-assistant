@@ -22,7 +22,7 @@ if errorlevel 1 (
 )
 echo   Starting invoice assistant ...
 echo.
-"%PY%" "%~dp0serve_api.py"
+"%PY%" "%~dp0src\serve_api.py"
 goto END
 
 :NOPY

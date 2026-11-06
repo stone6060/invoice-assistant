@@ -22,7 +22,7 @@
 创建完成后，GitHub 会显示仓库地址。在 `invoice-assistant` 目录里执行：
 
 ```bash
-cd "E:/大学/工坊/2026轮式/invoice-assistant"
+cd "<你的仓库目录>"
 
 # 换成你自己的用户名
 git remote add origin https://github.com/<你的用户名>/invoice-assistant.git
@@ -110,7 +110,7 @@ git push origin v1.0.0
 git clone https://github.com/<用户名>/invoice-assistant.git
 cd invoice-assistant
 pip install -r requirements.txt
-python serve_api.py
+python src/serve_api.py
 ```
 
 **推荐布局**（程序自动识别发票目录，无需配置）：
@@ -118,7 +118,7 @@ python serve_api.py
 ```
 我的发票/
 ├── 发票助手/          ← clone 到这里
-│   ├── serve_api.py
+│   ├── src/serve_api.py
 │   └── web/
 ├── 一堆发票.pdf
 └── 子文件夹/          ← 也会被递归扫描

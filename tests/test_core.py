@@ -14,7 +14,7 @@ import tempfile
 import zipfile
 
 sys.stdout.reconfigure(encoding='utf-8')
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src'))
 
 import api_service as api          # noqa: E402
 import categories                  # noqa: E402

@@ -8,7 +8,7 @@
 ## 一、启动
 
 ```bash
-python serve_api.py
+python src/serve_api.py
 ```
 
 启动后输出：
@@ -47,18 +47,30 @@ X-Api-Token: <你的令牌>
 
 | 方法 | 路径 | 说明 |
 | :--- | :--- | :--- |
-| GET | `/api/health` | 健康检查，返回模块开关状态 |
-| GET | `/api/bootstrap` | 取令牌与端口（免令牌，校验 Host） |
+| GET | `/api/health` | 健康检查 |
+| GET | `/api/bootstrap` | 取令牌、端口与 MCP 配置（免令牌，但校验 `Host`） |
 | GET | `/api/summary` | 汇总：文件数 / 计账数 / 总金额 / 重复 / 待确认 / 待确认金额 |
 | GET | `/api/invoices` | 发票列表，支持 `status` / `q` / `limit` |
 | GET | `/api/invoice/{key}` | 单张详情，key 可为 rel_path / filename / invoice_no |
 | GET | `/api/invoice/{key}/text` | **原文文本**，供 AI 分析排版问题 |
 | GET | `/api/rules` | 修复规则列表 |
-| POST | `/api/rules` | 新增修复规则 |
+| POST | `/api/rules` | 新增修复规则（字段白名单校验） |
 | DELETE | `/api/rules/{id}` | 删除规则 |
-| GET | `/api/config?reveal=1` | 读配置（`reveal=1` 回显令牌） |
-| POST | `/api/config` | 更新开关 |
-| POST | `/api/config/token/reset` | 重置令牌 |
+| GET | `/api/categories` | 分类列表 + 分配关系 + 各分类张数与金额 |
+| POST | `/api/categories` | 新建分类 `{name, color?}` |
+| POST | `/api/categories/assign` | 批量归类 `{rel_paths:[], category:<id 或 null>}` |
+| PATCH | `/api/categories/{id}` | 改名 `{name}` 或折叠 `{collapsed}` |
+| DELETE | `/api/categories/{id}` | 删除分类（其下的票回到「待归类」） |
+| POST | `/api/archive` | 归档：把已分类的票移动到 `<发票根>/<分类名>/`，`{rel_paths, dry_run}` |
+| POST | `/api/undo` | 撤销最近一次归档（逆序移回原位） |
+| POST | `/api/export` | 导出 Excel `{name?}` → `<发票目录>/导出/` |
+| POST | `/api/rescan` | 重新扫描（异步，立即返回） |
+| GET | `/api/scan/status` | 扫描进度 `{running, done, total, error?}` |
+| GET | `/api/config` | 读配置（含令牌与 MCP 路径，需 Header 鉴权） |
+| POST | `/api/config/token/reset` | 重置令牌，返回新令牌 |
+
+分类接口的 `id` 形如 `cat_12345678_ab12`；`category` 传 `null` 表示移出分类。
+删除分类不会删票，只会把该分类下的票置为「待归类」。
 
 ---
 

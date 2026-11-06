@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>发票助手</title>
-<link rel="stylesheet" href="app.css?v=46">
+<link rel="stylesheet" href="app.css?v=47">
 </head>
 <body>
 
@@ -33,6 +33,13 @@
         <path d="M8 1.6v1.6M8 12.8v1.6M2.6 8H1M15 8h-1.6M4.2 4.2 3 3M13 13l-1.2-1.2M11.8 4.2 13 3M3 13l1.2-1.2"
               stroke-linecap="round"/>
       </svg>
+    </button>
+
+    <button class="btn" id="btnUndo" title="把最近一次归档的发票移回原位置">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M2 8a6 6 0 1 0 1.8-4.3M2 2v4h4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      撤销归档
     </button>
 
     <button class="btn" id="btnRescan">
@@ -221,7 +228,7 @@
         <div class="set-row">
           <label>地址</label>
           <div class="set-val">
-            <code id="apiAddr">http://127.0.0.1:17802</code>
+            <code id="apiAddr">—</code>
             <button class="btn btn-sm" id="btnCopyAddr">复制</button>
           </div>
         </div>
@@ -245,6 +252,6 @@
   </div>
 </div>
 
-<script src="app.js?v=46"></script>
+<script src="app.js?v=47"></script>
 </body>
 </html>
