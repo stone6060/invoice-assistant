@@ -13,7 +13,7 @@
     {"id": "cat_0", "name": "电子元件", "color": "deepseek", "collapsed": false}
   ],
   "assignments": {
-    "111/_26952000000000000000.pdf": "cat_0"      # rel_path -> category id
+    "111/示例发票.pdf": "cat_0"      # rel_path -> category id
   }
 }
 
