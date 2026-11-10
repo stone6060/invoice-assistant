@@ -1,1 +1,4 @@
+# 运行期依赖：pip install -r requirements.txt
+# 两个都是预编译 wheel，Windows / macOS / Linux 都不需要本地编译器
 openpyxl>=3.1.0
+pymupdf>=1.24

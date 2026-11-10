@@ -2,7 +2,8 @@
 
 解析顺序：
   · 扫描根目录  : 环境变量 INVOICE_ROOT > .发票助手/config.json 的 scan.root > 自动探测
-  · pdftotext   : 环境变量 PDFTOTEXT > PATH 查找 > 常见安装路径
+  · PDF 文本    : PyMuPDF 优先（pip 安装）；没有时降级到 pdftotext：
+                  环境变量 PDFTOTEXT > PATH 查找 > 常见安装路径
 """
 import os
 import shutil

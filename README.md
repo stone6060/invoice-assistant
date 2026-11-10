@@ -17,83 +17,43 @@
 
 ## 快速开始
 
-### 环境要求
+### 方式一：下载即用（不用装 Python）
+
+到 [Releases](https://github.com/stone6060/invoice-assistant/releases) 下载
+`invoice-assistant-windows-x64.zip`，解压到任意目录，双击 **发票助手.exe**。
+
+- 浏览器会自动打开界面；关掉页面后程序 60 秒自动退出
+- 首次启动要扫一遍你的发票目录，张数多时十几秒，控制台窗口会打印进度
+- 数据都存在发票目录下的 `.发票助手/` 里，换机器时连同这个文件夹一起拷走即可
+
+### 方式二：从源码运行
 
 | 项目 | 要求 |
 | :--- | :--- |
 | Python | 3.9 及以上 |
-| 依赖 | `openpyxl`（其余全为标准库） |
-| pdftotext | 需要 **poppler 版**，见下方说明 |
+| 依赖 | `openpyxl`、`pymupdf`（两个都是预编译 wheel，不需要编译器） |
 
-```bash
+````bash
 pip install -r requirements.txt
-```
+python src/app_entry.py
+````
 
-### 关于 pdftotext（重要）
+Windows 也可以直接双击仓库根目录的 `启动发票助手.bat`，它会自动找可用的 Python。
 
-PDF 文本提取依赖 `pdftotext`。**必须是 poppler 版本**：
+> PDF 文本用 **PyMuPDF** 提取，不再需要另外安装 poppler / pdftotext。
+> 如果机器上恰好有 `pdftotext`，程序仍会自动探测并作为备选。
 
-- ✅ poppler（版本号形如 `pdftotext version 24.04.0`）—— 支持中文
-- ❌ xpdf（版本号含 `www.xpdfreader.com`）—— 会**静默吞掉中文**，解析结果几乎为空
+### 自己打包 exe
 
-安装方式：
+````bash
+pip install pyinstaller
+python -m PyInstaller --noconfirm 发票助手.spec
+````
 
-```bash
-# Windows：下载 poppler for Windows，解压后把 bin 目录加入 PATH
-#   或安装 MiKTeX（自带 pdftotext）
-# macOS
-brew install poppler
-# Ubuntu / Debian
-sudo apt install poppler-utils
-```
+产物在 `dist/发票助手/` 里，整个文件夹就是可分发的形态（约 91 MB，压 zip 后约 40 MB）。
 
-程序启动时会自动探测并**实测**候选 `pdftotext`，遇到 xpdf 构建会自动跳过。
-如果全部不可用，网页顶部会给出明确提示，而不是静默失败。
-
-### 启动
-
-```bash
-# Windows
-双击「启动发票助手.bat」
-
-# 任意平台
-python src/serve_api.py
-```
-
-浏览器会自动打开 `http://127.0.0.1:17800/index.html`（端口被占用时自动顺延）。
-**关闭页面约 60 秒后服务自动退出**，不留后台进程。
-
-### 指定发票目录
-
-程序从自身所在目录向上逐级探测，把第一个「确实像发票目录」的文件夹
-（里面至少 3 个文件长得像发票，且占比不低）当作发票根目录；探测不到时用当前目录。
-可以显式指定：
-
-```bash
-# 方式一：环境变量（优先级最高）
-set INVOICE_ROOT=D:\我的发票      # Windows
-export INVOICE_ROOT=~/invoices    # macOS / Linux
-
-# 方式二：网页「设置」面板里修改并保存
-```
-
-推荐的目录布局：
-
-```
-我的发票/                  ← 发票根目录（含 .pdf）
-├── 发票助手/              ← 本程序
-│   ├── src/               ← 程序代码
-│   ├── web/               ← 前端资源
-│   └── 启动发票助手.bat
-├── .发票助手/             ← 运行期数据（自动生成，勿提交）
-│   ├── config.json        ← 端口、令牌、扫描根
-│   ├── scan-data.json     ← 最近一次扫描结果
-│   ├── categories.json    ← 分类与归属
-│   ├── fix_rules.json     ← 人工修正规则
-│   └── undo-log.json      ← 归档操作日志（供撤销）
-├── 一号发票.pdf
-└── 111/                   ← 子目录也会被递归扫描
-```
+推一个 `v*` 标签（如 `git tag v1.0.0 && git push origin v1.0.0`），
+GitHub Actions 会自动构建 zip 并挂到 Release 上；也可以在 Actions 页面手动触发。
 
 ---
 
@@ -228,8 +188,8 @@ invoice-assistant/
 | 容器包不展开计账 | 压缩包整体标为「容器包」不计账，不会按包内文件逐张核对；若你把发票打包后原件也删了，合计会少算 |
 | 一张 PDF 多张票 | 只取第一张的金额 |
 | 仅中文发票 | 针对中国电子发票版式设计，其他国家票据不适用 |
-| pdftotext 必需 | 纯图片扫描件（无文字层）读不出，需 OCR |
-| 单文件 exe 不稳定 | 部分 Windows 环境下 PyInstaller `--onefile` 会因 TEMP 权限失败，建议用 `.bat` 启动 |
+| 扫描件需 OCR | 纯图片 PDF（无文字层）读不出，需先做 OCR；本工具不含 OCR |
+| 分发形态是文件夹 | 打包用 onedir 而非单文件：`--onefile` 每次启动都要解压到 TEMP，在限制了临时目录权限的机器上会直接失败 |
 
 遇到问题或有改进想法，欢迎提 Issue。
 

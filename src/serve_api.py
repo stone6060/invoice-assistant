@@ -277,10 +277,19 @@ def main():
     print(f'  API     http://127.0.0.1:{port}/api/health')
     print(f'  令牌    {cfg["api"]["token"]}')
     print(f'  发票目录 {cfg["scan"].get("root")}')
-    if paths.find_pdftotext() is None:
-        print()
-        print('  [警告] 未找到可用的 pdftotext，PDF 将无法解析。')
-        print('         请安装 poppler 并加入 PATH，或设置环境变量 PDFTOTEXT 指向可执行文件。')
+    try:
+        import pymupdf  # noqa: F401
+        _mupdf_ok = True
+    except Exception:
+        _mupdf_ok = False
+    if not _mupdf_ok:
+        if paths.find_pdftotext() is None:
+            print()
+            print('  [警告] 未装 PyMuPDF，也没找到 pdftotext —— PDF 将无法解析。')
+            print('         请执行 pip install pymupdf（推荐），或安装 poppler 并加入 PATH。')
+        else:
+            print()
+            print('  [提示] 未装 PyMuPDF，本次改用 pdftotext 解析 PDF。')
     print()
     print('  MCP 接入（Claude Desktop / Cursor / Cline）:')
     print(f'    command: {sys.executable}')

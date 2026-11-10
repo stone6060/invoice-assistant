@@ -62,7 +62,34 @@ def file_hash(p):
     return h.hexdigest()[:16]
 
 
+def _pymupdf_text(path):
+    """用 PyMuPDF 按坐标还原视觉阅读顺序。
+
+    sort=True 让输出与 pdftotext 的版面顺序一致（「购 名称：湖南大学」在同一行），
+    下游正则因此不必区分数据来源。返回 None 表示 PyMuPDF 不可用或解析失败，
+    由调用方退回外部 pdftotext。
+    """
+    try:
+        import pymupdf
+    except ImportError:
+        return None
+    try:
+        doc = pymupdf.open(path)
+        try:
+            return '\n'.join(page.get_text('text', sort=True) for page in doc)
+        finally:
+            doc.close()
+    except Exception:
+        return None
+
+
 def pdf_text(path):
+    """PDF → 文本：优先内置 PyMuPDF，没有就退回外部 pdftotext。"""
+    text = _pymupdf_text(path)
+    if text is not None:
+        return text
+    if not PDFTOTEXT:
+        return ''
     try:
         r = subprocess.run([PDFTOTEXT, path, '-'], stdout=subprocess.PIPE,
                            stderr=subprocess.DEVNULL, timeout=30)
@@ -194,23 +221,54 @@ def extract_upper(text):
 def party_names(text):
     """取购买方 / 销售方的名称。
 
-    PDF 文字层是竖排的——「购买方」被拆成 购 / 买 / 方 三行，名称紧跟在
-    「购」后面，所以不能按「购买方名称」整串匹配，只能看「名称：」
-    前面几十个字符里有没有「购」或「销」。
+    两种文字层都要兼容：
+      · PyMuPDF（sort=True，默认）：一列一个「名称：」，购/销 与名称同列，
+        购买方在左、销售方在右，同一行里并排出现；
+      · pdftotext（回退路径）：「购买方」被竖排拆成 购 / 买 / 方 三行，
+        名称紧跟在「购」后面的若干行里。
     """
+
+    def clean(raw):
+        """从「…名称：XXX<税号/地址/下一列>」里只取 XXX；没有「名称：」返回空。"""
+        parts = re.split(r'名\s*称\s*[:：]', raw)
+        if len(parts) < 2:
+            return ''
+        n = re.split(r'\s{2,}', parts[1])[0].strip()
+        n = re.split(r'\d{8,}|统一社会信用代码|纳税人识别号|地\s*址|电\s*话|开户行', n)[0].strip()
+        # 末尾偶尔粘上竖排框线的单字（买 / 方 / 信 / 息）
+        if len(n) > 8 and n[-1] in '购买方信息销售':
+            n = n[:-1].strip()
+        return n[:60].strip()
+
+    # A. 版面风格：逐行、逐列（多个空格视为列分隔）
     buyer = seller = ''
-    for m in re.finditer(r'名\s*称\s*[:：]\s*([^\r\n]+)', text):
-        before = text[max(0, m.start() - 40):m.start()]
-        name = m.group(1).strip()
-        # 同一行里常粘着税号/地址，切掉它们只留名称
-        name = re.split(r'\d{8,}|统一社会信用代码|纳税人识别号|地\s*址|电\s*话|开户行', name)[0].strip()
-        name = name[:60].strip()
-        if not name:
+    for line in text.splitlines():
+        if not re.search(r'名\s*称\s*[:：]', line):
+            continue
+        for col in re.split(r'\s{2,}', line):
+            if not re.search(r'名\s*称\s*[:：]', col):
+                continue
+            n = clean(col)
+            if not n:
+                continue
+            if not buyer and '购' in col:
+                buyer = n
+            elif not seller and '销' in col:
+                seller = n
+        if buyer and seller:
+            return buyer, seller
+
+    # B. 竖排风格：看「名称：」前面一段有没有「购」/「销」
+    #    注意不能把值一起抓进正则——同一行并排两个「名称：」时贪婪匹配会吞掉第二个
+    for m in re.finditer(r'名\s*称\s*[:：]', text):
+        before = text[max(0, m.start() - 120):m.start()]
+        n = clean(text[m.start():m.start() + 120])
+        if not n:
             continue
         if not buyer and '购' in before:
-            buyer = name
+            buyer = n
         elif not seller and '销' in before:
-            seller = name
+            seller = n
         if buyer and seller:
             break
     return buyer, seller
