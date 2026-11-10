@@ -50,7 +50,7 @@ pip install pyinstaller
 python -m PyInstaller --noconfirm 发票助手.spec
 ````
 
-产物在 `dist/发票助手/` 里，整个文件夹就是可分发的形态（约 91 MB，压 zip 后约 40 MB）。
+产物在 `dist/发票助手/` 里，整个文件夹就是可分发的形态（约 91 MB，压成 zip 约 30 MB）。
 
 推一个 `v*` 标签（如 `git tag v1.0.0 && git push origin v1.0.0`），
 GitHub Actions 会自动构建 zip 并挂到 Release 上；也可以在 Actions 页面手动触发。
@@ -145,7 +145,9 @@ POST   /api/reveal                        # 在资源管理器打开 {target: ro
 
 ```
 invoice-assistant/
-├── 启动发票助手.bat       双击即用（自动找 Python 并装依赖）
+├── 发票助手.spec          PyInstaller 打包配置（本地与 CI 共用）
+├── .github/workflows/    推 v* 标签自动构建 zip 并发 Release
+├── 启动发票助手.bat       源码方式启动（自动找 Python 并装依赖）
 ├── requirements.txt
 ├── src/                  程序代码
 │   ├── serve_api.py      入口：起 HTTP 服务 + 页面关闭后自动退出
